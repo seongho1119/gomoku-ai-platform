@@ -1,14 +1,19 @@
+'use client';
+
 import Link from "next/link";
 import { Cpu, UploadCloud, Swords } from "lucide-react";
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function Home() {
+  const { t } = useLanguage();
+
   return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center text-center">
       <h1 className="text-5xl md:text-7xl font-extrabold mb-6 tracking-tight">
-        Master <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-violet-500">Gomoku</span> with AI
+        {t('heroTitle')} <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-violet-500">Gomoku</span> {t('heroTitle2')}
       </h1>
       <p className="text-xl text-slate-300 mb-12 max-w-2xl">
-        Train your own Reinforcement Learning model directly in your browser. Upload your best AIs and challenge other players' models in the Arena.
+        {t('heroSubtitle')}
       </p>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl">
@@ -16,16 +21,16 @@ export default function Home() {
           <div className="w-12 h-12 rounded-lg bg-blue-500/20 flex items-center justify-center mb-4 group-hover:bg-blue-500/40 transition-colors">
             <Cpu className="w-6 h-6 text-blue-400" />
           </div>
-          <h2 className="text-2xl font-bold mb-2">AI Studio</h2>
-          <p className="text-slate-400">Train an AI agent using self-play. Watch it learn and improve its strategies in real-time.</p>
+          <h2 className="text-2xl font-bold mb-2">{t('studioTitle')}</h2>
+          <p className="text-slate-400">{t('studioDesc')}</p>
         </Link>
         
         <Link href="/hub" className="glass-panel p-8 rounded-2xl hover:-translate-y-2 transition-transform duration-300 group cursor-pointer text-left">
           <div className="w-12 h-12 rounded-lg bg-emerald-500/20 flex items-center justify-center mb-4 group-hover:bg-emerald-500/40 transition-colors">
             <UploadCloud className="w-6 h-6 text-emerald-400" />
           </div>
-          <h2 className="text-2xl font-bold mb-2">Model Hub</h2>
-          <p className="text-slate-400">Upload your trained models to the cloud. Browse and download AIs created by the community.</p>
+          <h2 className="text-2xl font-bold mb-2">{t('hubTitle')}</h2>
+          <p className="text-slate-400">{t('hubDesc')}</p>
         </Link>
         
         <Link href="/arena" className="glass-panel p-8 rounded-2xl hover:-translate-y-2 transition-transform duration-300 group cursor-pointer text-left relative overflow-hidden">
@@ -33,8 +38,8 @@ export default function Home() {
           <div className="w-12 h-12 rounded-lg bg-violet-500/20 flex items-center justify-center mb-4 group-hover:bg-violet-500/40 transition-colors relative z-10">
             <Swords className="w-6 h-6 text-violet-400" />
           </div>
-          <h2 className="text-2xl font-bold mb-2 relative z-10">Battle Arena</h2>
-          <p className="text-slate-400 relative z-10">Challenge uploaded AIs. Test your skills against the machine or let two AIs fight.</p>
+          <h2 className="text-2xl font-bold mb-2">{t('arenaTitle')}</h2>
+          <p className="text-slate-400 relative z-10">{t('arenaDesc')}</p>
         </Link>
       </div>
     </div>

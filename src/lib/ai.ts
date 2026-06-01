@@ -39,37 +39,44 @@ export class GomokuAI {
     return flat;
   }
 
-  async predictMove(board: BoardState, player: Player): Promise<{row: number, col: number}> {
+  async predictTopMoves(board: BoardState, player: Player, topN: number = 3): Promise<{row: number, col: number, score: number}[]> {
     const moves = getAvailableMoves(board);
-    if (moves.length === 0) return { row: -1, col: -1 };
+    if (moves.length === 0) return [];
 
-    let bestMove = moves[Math.floor(Math.random() * moves.length)];
-    let bestValue = -Infinity;
-
-    // Evaluate a subset of moves for performance in browser
-    const movesToEvaluate = moves.sort(() => 0.5 - Math.random()).slice(0, 10);
-
-    for (const move of movesToEvaluate) {
-      // Simulate move
+    // Create a batch of inputs
+    const inputsArray = [];
+    for (const move of moves) {
       board[move.row][move.col] = player;
-      
-      const input = tf.tensor2d([this.flattenBoard(board, player)]);
-      const pred = this.model.predict(input) as tf.Tensor;
-      const value = (await pred.data())[0];
-      
-      input.dispose();
-      pred.dispose();
-
-      if (value > bestValue) {
-        bestValue = value;
-        bestMove = move;
-      }
-
-      // Undo move
-      board[move.row][move.col] = 0;
+      inputsArray.push(this.flattenBoard(board, player));
+      board[move.row][move.col] = 0; // undo
     }
 
-    return bestMove;
+    const inputTensor = tf.tensor2d(inputsArray);
+    const predictions = this.model.predict(inputTensor) as tf.Tensor;
+    const scores = await predictions.data();
+
+    inputTensor.dispose();
+    predictions.dispose();
+
+    const scoredMoves = moves.map((move, i) => ({
+      row: move.row,
+      col: move.col,
+      // Convert tanh output (-1 to 1) to a pseudo-probability score (0 to 1) for visualization
+      score: (scores[i] + 1) / 2 
+    }));
+
+    // Sort by descending score
+    scoredMoves.sort((a, b) => b.score - a.score);
+
+    return scoredMoves.slice(0, topN);
+  }
+
+  async predictMove(board: BoardState, player: Player): Promise<{row: number, col: number}> {
+    const topMoves = await this.predictTopMoves(board, player, 1);
+    if (topMoves.length > 0) {
+      return { row: topMoves[0].row, col: topMoves[0].col };
+    }
+    return { row: -1, col: -1 };
   }
 
   async train(experiences: {board: number[], reward: number}[]) {

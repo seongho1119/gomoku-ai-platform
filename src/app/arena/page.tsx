@@ -5,8 +5,10 @@ import GomokuBoard from '@/components/GomokuBoard';
 import { createEmptyBoard, checkWin, isBoardFull, Player, getAvailableMoves } from '@/lib/gomoku';
 import { RefreshCcw } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function ArenaPage() {
+  const { t } = useLanguage();
   const [board, setBoard] = useState(createEmptyBoard());
   const [currentPlayer, setCurrentPlayer] = useState<Player>(1); // 1: Human (Black), 2: AI (White)
   const [gameOver, setGameOver] = useState(false);
@@ -70,17 +72,17 @@ export default function ArenaPage() {
     <div className="flex flex-col lg:flex-row gap-8 items-start">
       <div className="flex-1 max-w-md">
         <div className="glass-panel p-6 rounded-2xl">
-          <h1 className="text-3xl font-bold mb-4">Battle Arena</h1>
-          <p className="text-slate-400 mb-8">You are playing as Black. Match 5 stones in a row to win.</p>
+          <h1 className="text-3xl font-bold mb-4">{t('arenaTitle')}</h1>
+          <p className="text-slate-400 mb-8">{t('arenaDesc')}</p>
           
           <div className="bg-slate-800/50 p-6 rounded-xl mb-6 text-center">
             {gameOver ? (
               <div className="text-2xl font-bold text-white">
-                {winner === 1 ? '🎉 You Win!' : winner === 2 ? '🤖 AI Wins!' : '🤝 Draw'}
+                {winner === 1 ? t('youWin') : winner === 2 ? t('aiWins') : t('draw')}
               </div>
             ) : (
               <div className="text-xl font-medium text-slate-300">
-                {currentPlayer === 1 ? 'Your Turn (Black)' : 'AI is thinking...'}
+                {currentPlayer === 1 ? t('yourTurn') : t('aiThinking')}
               </div>
             )}
           </div>
@@ -89,7 +91,7 @@ export default function ArenaPage() {
             onClick={resetGame}
             className="w-full bg-slate-700 hover:bg-slate-600 text-white py-3 px-6 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
           >
-            <RefreshCcw className="w-5 h-5" /> Restart Game
+            <RefreshCcw className="w-5 h-5" /> {t('restart')}
           </button>
         </div>
       </div>

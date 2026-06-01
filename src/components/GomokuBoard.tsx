@@ -9,27 +9,35 @@ interface GomokuBoardProps {
   board: BoardState;
   onMove?: (row: number, col: number) => void;
   disabled?: boolean;
+  thinkingMoves?: {row: number, col: number, score: number}[];
 }
 
-export default function GomokuBoard({ board, onMove, disabled }: GomokuBoardProps) {
+export default function GomokuBoard({ board, onMove, disabled, thinkingMoves = [] }: GomokuBoardProps) {
   return (
     <div className="relative inline-block bg-[#dcb35c] p-4 rounded-lg shadow-2xl border-4 border-[#8b5a2b]">
-      {/* Board Grid Lines */}
-      <div 
-        className="absolute inset-4 pointer-events-none"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${BOARD_SIZE - 1}, 1fr)`,
-          gridTemplateRows: `repeat(${BOARD_SIZE - 1}, 1fr)`,
-        }}
+      {/* Board Grid Lines (Precise SVG) */}
+      <svg 
+        className="absolute top-0 left-0 pointer-events-none opacity-60 mix-blend-multiply"
+        width={BOARD_SIZE * 32} 
+        height={BOARD_SIZE * 32}
       >
-        {Array.from({ length: (BOARD_SIZE - 1) * (BOARD_SIZE - 1) }).map((_, i) => (
-          <div key={`grid-${i}`} className="border-t border-l border-[#000000] opacity-60 mix-blend-multiply" />
+        {Array.from({ length: BOARD_SIZE }).map((_, i) => (
+          <React.Fragment key={`line-${i}`}>
+            {/* Horizontal lines */}
+            <line 
+              x1={16} y1={16 + i * 32} 
+              x2={BOARD_SIZE * 32 - 16} y2={16 + i * 32} 
+              stroke="black" strokeWidth="1" 
+            />
+            {/* Vertical lines */}
+            <line 
+              x1={16 + i * 32} y1={16} 
+              x2={16 + i * 32} y2={BOARD_SIZE * 32 - 16} 
+              stroke="black" strokeWidth="1" 
+            />
+          </React.Fragment>
         ))}
-        {/* Right and Bottom borders for the grid lines */}
-        <div className="absolute top-0 right-0 h-full w-[1px] bg-[#000000] opacity-60 mix-blend-multiply" />
-        <div className="absolute bottom-0 left-0 w-full h-[1px] bg-[#000000] opacity-60 mix-blend-multiply" />
-      </div>
+      </svg>
 
       {/* Intersections (Clickable Areas) */}
       <div 
@@ -60,6 +68,21 @@ export default function GomokuBoard({ board, onMove, disabled }: GomokuBoardProp
                 <div className="absolute w-3 h-3 rounded-full bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity" />
               )}
               
+              {/* Thinking Indicator */}
+              {cell === 0 && thinkingMoves.find(m => m.row === r && m.col === c) && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.5 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="absolute z-20 flex flex-col items-center justify-center pointer-events-none"
+                >
+                  <div className="w-4 h-4 rounded-full border-2 border-emerald-400 bg-emerald-500/20 animate-ping absolute" />
+                  <div className="w-3 h-3 rounded-full bg-emerald-500 z-10 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                  <span className="absolute -top-6 text-[10px] font-bold text-emerald-300 bg-black/70 px-1 rounded whitespace-nowrap backdrop-blur-sm">
+                    {Math.round((thinkingMoves.find(m => m.row === r && m.col === c)?.score || 0) * 100)}%
+                  </span>
+                </motion.div>
+              )}
+
               {/* Pieces */}
               {cell !== 0 && (
                 <motion.div
