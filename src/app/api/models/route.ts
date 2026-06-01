@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { sql } from '@vercel/postgres';
+import { createClient } from '@vercel/postgres';
 
 export async function GET() {
   try {
-    // Fallback if Vercel Postgres is not yet configured by the user
-    if (!process.env.POSTGRES_URL) {
-      console.warn("POSTGRES_URL is not set. Returning mock data.");
+    const dbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+    // Fallback if Vercel Postgres/Neon is not yet configured by the user
+    if (!dbUrl) {
+      console.warn("Database URL is not set. Returning mock data.");
       return NextResponse.json([
         { id: 1, name: "AlphaGomoku v1", author: "DeepMindFan", winrate: 92, downloads: 1205 },
         { id: 2, name: "Basic Q-Learning", author: "StudentJS", winrate: 45, downloads: 304 },
@@ -13,8 +14,15 @@ export async function GET() {
       ]);
     }
 
+    const client = createClient({ connectionString: dbUrl });
+    await client.connect();
+
     // Try to query the real database
-    const { rows } = await sql`SELECT * FROM models ORDER BY created_at DESC;`;
+    const { rows } = await client.sql`SELECT * FROM models ORDER BY created_at DESC;`;
+    
+    // Close the connection explicitly when using createClient (if needed, though in edge/serverless it's often cached)
+    await client.end();
+    
     return NextResponse.json(rows);
   } catch (error) {
     // If table doesn't exist yet (first run), return empty or mock
@@ -25,14 +33,18 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    if (!process.env.POSTGRES_URL) {
+    const dbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+    if (!dbUrl) {
       return NextResponse.json({ success: true, message: "Mock upload successful (No DB configured)" });
     }
 
     const { name, author, winrate, modelUrl } = await request.json();
     
+    const client = createClient({ connectionString: dbUrl });
+    await client.connect();
+
     // Ensure table exists
-    await sql`
+    await client.sql`
       CREATE TABLE IF NOT EXISTS models (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -44,12 +56,13 @@ export async function POST(request: Request) {
       );
     `;
 
-    const result = await sql`
+    const result = await client.sql`
       INSERT INTO models (name, author, winrate, model_url) 
       VALUES (${name}, ${author}, ${winrate}, ${modelUrl || null})
       RETURNING *;
     `;
 
+    await client.end();
     return NextResponse.json({ success: true, data: result.rows[0] });
   } catch (error: any) {
     console.error('Upload Error:', error);
