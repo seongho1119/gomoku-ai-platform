@@ -6,13 +6,11 @@ import { createEmptyBoard, checkWin, isBoardFull, Player, BoardState, getAvailab
 import GomokuBoard from '@/components/GomokuBoard';
 import { Play, Upload, Brain, RotateCcw, Square, Bot, User, Coins, Zap } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { useLanguage } from '@/context/LanguageContext';
 import { useTokens } from '@/hooks/useTokens';
 
 const MAX_AUTO_EPISODES = 10;
 
 export default function StudioPage() {
-  const { t } = useLanguage();
   const tokens = useTokens();
   
   const [mode, setMode] = useState<'play' | 'auto'>('play');
@@ -22,10 +20,9 @@ export default function StudioPage() {
   const [gameOver, setGameOver] = useState(false);
   const [isAutoTraining, setIsAutoTraining] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  
+
   // AI State
   const [sessionAutoEpisodes, setSessionAutoEpisodes] = useState(0); 
-  const [thinkingMoves, setThinkingMoves] = useState<{row: number, col: number, score: number}[]>([]);
   const aiRef = useRef<GomokuAI | null>(null);
   const isAutoTrainingRef = useRef(false);
   
@@ -34,7 +31,6 @@ export default function StudioPage() {
   
   // Upload state
   const [modelName, setModelName] = useState('');
-  const [authorName, setAuthorName] = useState('');
   const [modelPassword, setModelPassword] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
@@ -45,7 +41,6 @@ export default function StudioPage() {
       if (loaded) {
         setBrainSize(aiRef.current.brainSize);
       }
-      updateThinking(createEmptyBoard(), 1);
       setIsInitializing(false);
     };
     initAI();
@@ -53,18 +48,12 @@ export default function StudioPage() {
 
   const handleBrainChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newSize = e.target.value as BrainSize;
-    if (confirm("Changing brain size will wipe your AI's current memory. Are you sure?")) {
+    if (confirm("뇌 크기를 변경하면 AI의 기존 기억이 모두 삭제됩니다. 계속하시겠습니까?")) {
       setBrainSize(newSize);
       aiRef.current = new GomokuAI(newSize);
       aiRef.current.saveMemory();
       resetBoard();
     }
-  };
-
-  const updateThinking = async (currentBoard: BoardState, player: Player) => {
-    if (!aiRef.current || gameOver || isAutoTrainingRef.current) return;
-    const topMoves = await aiRef.current.predictTopMoves(currentBoard, player, 3);
-    setThinkingMoves(topMoves);
   };
 
   const handleUserMove = async (row: number, col: number) => {
@@ -81,7 +70,6 @@ export default function StudioPage() {
     }
 
     setBoard(newBoard);
-    setThinkingMoves([]); 
 
     if (checkWin(newBoard, row, col, 1)) {
       setGameOver(true);
@@ -115,7 +103,6 @@ export default function StudioPage() {
           setGameOver(true);
         } else {
           setCurrentPlayer(1);
-          updateThinking(afterAiBoard, 1);
         }
       }
     }, 50);
@@ -124,16 +111,14 @@ export default function StudioPage() {
   const runAutoTraining = async () => {
     if (!aiRef.current || isAutoTrainingRef.current) return;
     
-    // Check and consume Auto Token
     if (!tokens.consumeAutoToken()) {
-      alert("Not enough Auto Tokens! Play 100 Manual Games to earn 1 Auto Token.");
+      alert("오토 토큰이 부족합니다! 수동으로 플레이하여 토큰을 획득하세요.");
       return;
     }
 
     isAutoTrainingRef.current = true;
     setIsAutoTraining(true);
     setSessionAutoEpisodes(0);
-    setThinkingMoves([]); 
     
     let localAutoEpisodes = 0;
 
@@ -214,7 +199,7 @@ export default function StudioPage() {
     await aiRef.current.train(experiences);
     await aiRef.current.saveMemory();
     
-    tokens.addManualGame(); // This handles giving tokens!
+    tokens.addManualGame(); 
     
     resetBoard();
   };
@@ -224,7 +209,6 @@ export default function StudioPage() {
     setCurrentPlayer(1);
     setGameOver(false);
     setHistory([]);
-    if (mode === 'play') updateThinking(createEmptyBoard(), 1);
   };
 
   const toggleMode = (newMode: 'play' | 'auto') => {
@@ -235,8 +219,9 @@ export default function StudioPage() {
 
   const uploadModel = async () => {
     if (!aiRef.current) return;
-    if (!modelName.trim() || !authorName.trim() || !modelPassword.trim()) {
-      alert("Please fill in AI Name, Author Name, and Password!");
+    
+    if (!modelName.trim() || !modelPassword.trim()) {
+      alert("AI 이름과 비밀번호를 모두 입력해주세요!");
       return;
     }
     
@@ -247,7 +232,7 @@ export default function StudioPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: modelName.trim(),
-          author: authorName.trim(),
+          author: modelName.trim(), // Use name as author
           password: modelPassword.trim(),
           winrate: tokens.totalManualGames > 0 ? 50 + Math.min(tokens.totalManualGames * 2, 45) : 0, 
           modelUrl: "https://mock-url.com/model.json" 
@@ -257,41 +242,40 @@ export default function StudioPage() {
       const data = await res.json();
       if (data.success) {
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-        alert("Model successfully saved to Cloud Database!");
+        alert("클라우드 데이터베이스에 성공적으로 업로드되었습니다!");
         setModelName('');
-        setAuthorName('');
         setModelPassword('');
       } else {
-        alert("Failed to upload: " + data.error);
+        alert("업로드 실패: " + data.error);
       }
     } catch (error) {
       console.error(error);
-      alert("Error uploading model.");
+      alert("업로드 중 오류가 발생했습니다.");
     } finally {
       setIsUploading(false);
     }
   };
 
   if (isInitializing || !tokens.isLoaded) {
-    return <div className="text-center py-20 text-xl font-bold animate-pulse text-emerald-400">Loading AI Memory...</div>;
+    return <div className="text-center py-20 text-xl font-bold animate-pulse text-emerald-400">AI 두뇌 불러오는 중...</div>;
   }
 
   return (
-    <div className="flex flex-col xl:flex-row gap-8 justify-center max-w-5xl mx-auto">
+    <div className="flex flex-col xl:flex-row gap-8 justify-center max-w-5xl mx-auto relative">
       
       {/* Left Panel: Controls */}
-      <div className="flex-1 max-w-md">
+      <div className="flex-1 max-w-md w-full">
         <div className="glass-panel p-6 rounded-2xl mb-6">
           <div className="flex justify-between items-start mb-6">
-            <h1 className="text-3xl font-bold">{t('studioTitle')}</h1>
+            <h1 className="text-3xl font-bold">스튜디오</h1>
             
             {/* Wallet UI */}
             <div className="flex flex-col items-end gap-1">
               <div className="bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 border border-amber-500/30">
-                <Coins className="w-3 h-3" /> Arena Tokens: {tokens.arenaTokens}
+                <Coins className="w-3 h-3" /> 아레나 토큰: {tokens.arenaTokens}
               </div>
               <div className="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 border border-emerald-500/30">
-                <Zap className="w-3 h-3" /> Auto Tokens: {tokens.autoTokens}
+                <Zap className="w-3 h-3" /> 오토 토큰: {tokens.autoTokens}
               </div>
             </div>
           </div>
@@ -301,7 +285,7 @@ export default function StudioPage() {
               onClick={() => toggleMode('play')}
               className={`flex-1 py-2 rounded-md font-bold text-sm flex items-center justify-center gap-2 transition-colors ${mode === 'play' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
             >
-              <User className="w-4 h-4" /> {t('playMode')}
+              <User className="w-4 h-4" /> 직접 플레이
             </button>
             
             <button 
@@ -310,35 +294,35 @@ export default function StudioPage() {
                 mode === 'auto' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Bot className="w-4 h-4" /> {t('autoMode')}
+              <Bot className="w-4 h-4" /> 자동 학습
             </button>
           </div>
           
           <div className="flex items-center justify-between bg-slate-800/50 p-4 rounded-xl mb-6">
-            <span className="font-bold text-slate-300">{t('brainSize')}</span>
+            <span className="font-bold text-slate-300">뇌 구조 선택</span>
             <select 
               value={brainSize} 
               onChange={handleBrainChange}
               disabled={isAutoTraining}
-              className="bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white outline-none cursor-pointer"
+              className="bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white outline-none cursor-pointer text-sm"
             >
-              <option value="shallow">{t('brainShallow')}</option>
-              <option value="standard">{t('brainStandard')}</option>
-              <option value="deep">{t('brainDeep')}</option>
+              <option value="shallow">초보 (얕은 뇌)</option>
+              <option value="standard">중수 (표준 뇌)</option>
+              <option value="deep">고수 (깊은 뇌)</option>
             </select>
           </div>
           
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div className="bg-slate-800/50 p-4 rounded-xl text-center">
-              <div className="text-slate-400 text-xs mb-1">Total Manual Games</div>
+              <div className="text-slate-400 text-xs mb-1">총 수동 게임 수</div>
               <div className="text-2xl font-bold text-blue-400">
                 {tokens.totalManualGames}
               </div>
-              <div className="text-[10px] text-slate-500 mt-1">Next Token in {10 - (tokens.totalManualGames % 10)}</div>
+              <div className="text-[10px] text-slate-500 mt-1">다음 보상까지 {10 - (tokens.totalManualGames % 10)}판</div>
             </div>
             
             <div className="bg-slate-800/50 p-4 rounded-xl text-center relative overflow-hidden">
-              <div className="text-slate-400 text-xs mb-1">Session Auto</div>
+              <div className="text-slate-400 text-xs mb-1">오토 학습 (이번 세션)</div>
               <div className="text-2xl font-bold text-emerald-400">
                 {sessionAutoEpisodes}/{MAX_AUTO_EPISODES}
               </div>
@@ -356,9 +340,9 @@ export default function StudioPage() {
               <button 
                 onClick={trainFromHistory}
                 disabled={history.length === 0}
-                className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white py-3 px-6 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+                className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white py-3 px-6 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors flex-wrap"
               >
-                <Brain className="w-5 h-5" /> {t('teachAI')} (+1 Game)
+                <Brain className="w-5 h-5" /> 결과로 AI 학습시키기 (+1 판)
               </button>
             ) : (
               <div className="flex flex-col gap-2">
@@ -366,23 +350,23 @@ export default function StudioPage() {
                   <button 
                     onClick={runAutoTraining}
                     disabled={tokens.autoTokens <= 0}
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 px-6 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors relative overflow-hidden group"
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 px-6 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors relative overflow-hidden group flex-wrap"
                   >
                     <div className="absolute inset-0 bg-[url('/noise.png')] opacity-20 mix-blend-overlay group-hover:opacity-30 transition-opacity"></div>
-                    <Play className="w-5 h-5" /> Start Auto (Cost: 1 <Zap className="w-4 h-4 inline" />)
+                    <Play className="w-5 h-5" /> 자동 학습 시작 (비용: 1 <Zap className="w-4 h-4 inline" />)
                   </button>
                 ) : (
                   <button 
                     onClick={stopAutoTraining}
                     className="w-full bg-red-600 hover:bg-red-500 text-white py-3 px-6 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
                   >
-                    <Square className="w-5 h-5" /> {t('stopAuto')}
+                    <Square className="w-5 h-5" /> 자동 학습 중지
                   </button>
                 )}
                 
                 {tokens.autoTokens <= 0 && !isAutoTraining && (
                   <div className="text-amber-400 text-xs text-center">
-                    You need 1 Auto Token. Play {100 - (tokens.totalManualGames % 100)} more manual games to earn one!
+                    오토 토큰이 1개 필요합니다. 수동 플레이 보상으로 얻을 수 있습니다.
                   </div>
                 )}
               </div>
@@ -392,57 +376,46 @@ export default function StudioPage() {
               disabled={isAutoTraining}
               className="w-full bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white py-3 px-6 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
             >
-              <RotateCcw className="w-5 h-5" /> {t('clearBoard')}
+              <RotateCcw className="w-5 h-5" /> 바둑판 초기화
             </button>
           </div>
 
           <div className="mt-8 pt-6 border-t border-white/10">
-            <h3 className="text-lg font-bold mb-4">Save & Upload Model</h3>
+            <h3 className="text-lg font-bold mb-4">내 AI 클라우드에 업로드</h3>
             <div className="flex flex-col gap-3">
               <input 
                 type="text" 
-                placeholder="AI Name..."
+                placeholder="AI 이름..."
                 value={modelName}
                 onChange={(e) => setModelName(e.target.value)}
                 className="w-full bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
               />
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  placeholder="Author Name..."
-                  value={authorName}
-                  onChange={(e) => setAuthorName(e.target.value)}
-                  className="flex-1 bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
-                />
-                <input 
-                  type="password" 
-                  placeholder="Password (for edit)..."
-                  value={modelPassword}
-                  onChange={(e) => setModelPassword(e.target.value)}
-                  className="flex-1 bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
-                />
-              </div>
+              <input 
+                type="password" 
+                placeholder="비밀번호..."
+                value={modelPassword}
+                onChange={(e) => setModelPassword(e.target.value)}
+                className="w-full bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+              />
               <button 
                 onClick={uploadModel}
                 disabled={isUploading || isAutoTraining}
-                className="w-full mt-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-3 px-6 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap"
+                className="w-full mt-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white py-3 px-6 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap"
               >
-                <Upload className="w-5 h-5" /> {t('upload')}
+                <Upload className="w-5 h-5" /> 업로드
               </button>
             </div>
-            {/* Hidden Dev Button */}
             <button onClick={tokens.addDebugTokens} className="opacity-0 w-4 h-4 absolute top-0 right-0"></button>
           </div>
         </div>
       </div>
       
       {/* Right Panel: Board */}
-      <div className="flex flex-col items-center justify-start pt-4">
+      <div className="flex flex-col items-center justify-start pt-4 w-full md:w-auto">
         <GomokuBoard 
           board={board} 
           onMove={mode === 'play' ? handleUserMove : undefined} 
           disabled={gameOver || isAutoTraining || (mode === 'play' && currentPlayer === 2)} 
-          thinkingMoves={thinkingMoves} 
         />
       </div>
 

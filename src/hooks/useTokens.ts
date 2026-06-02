@@ -7,7 +7,6 @@ export function useTokens() {
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    // Load from local storage on mount
     const savedManual = parseInt(localStorage.getItem('gomoku_manual_games') || '0');
     const savedArena = parseInt(localStorage.getItem('gomoku_arena_tokens') || '0');
     const savedAuto = parseInt(localStorage.getItem('gomoku_auto_tokens') || '0');
@@ -34,9 +33,8 @@ export function useTokens() {
 
     if (newManual % 10 === 0) {
       newArena += 1;
-    }
-    if (newManual % 100 === 0) {
-      newAuto += 1;
+      newAuto += 1000;
+      alert("🎉 10판 달성 보상!\n아레나 토큰 1개와 오토 토큰 1000개를 획득하셨습니다!");
     }
 
     saveState(newManual, newArena, newAuto);
@@ -58,9 +56,8 @@ export function useTokens() {
     return false;
   };
 
-  // Development helper
   const addDebugTokens = () => {
-    saveState(totalManualGames, arenaTokens + 5, autoTokens + 5);
+    saveState(totalManualGames, arenaTokens + 5, autoTokens + 1000);
   };
 
   return {
