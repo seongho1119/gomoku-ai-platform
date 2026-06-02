@@ -8,7 +8,7 @@ import { Play, Upload, Brain, RotateCcw, Square, Bot, User, Coins, Zap } from 'l
 import confetti from 'canvas-confetti';
 import { useTokens } from '@/hooks/useTokens';
 
-const MAX_AUTO_EPISODES = 10;
+const MAX_AUTO_EPISODES = 1000;
 
 export default function StudioPage() {
   const tokens = useTokens();
@@ -155,8 +155,8 @@ export default function StudioPage() {
             currentTurn = currentTurn === 1 ? 2 : 1;
           }
           
-          setBoard([...currentBoard.map(r => [...r])]);
-          await new Promise(r => setTimeout(r, 10)); 
+          // Do NOT update visual board state during auto-training to prevent massive lag
+          // setBoard([...currentBoard.map(r => [...r])]);
         } else {
           isDone = true;
         }
@@ -164,7 +164,13 @@ export default function StudioPage() {
 
       if (isAutoTrainingRef.current) {
         localAutoEpisodes++;
-        setSessionAutoEpisodes(localAutoEpisodes);
+        
+        // Update UI counter every 10 episodes to prevent React re-render lag
+        if (localAutoEpisodes % 10 === 0 || localAutoEpisodes === MAX_AUTO_EPISODES) {
+          setSessionAutoEpisodes(localAutoEpisodes);
+          // Yield to main thread briefly to allow UI to update
+          await new Promise(r => setTimeout(r, 0));
+        }
 
         if (winner !== null) {
           const experiences = gameHistory.map(h => ({
@@ -353,7 +359,7 @@ export default function StudioPage() {
                     className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 px-6 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors relative overflow-hidden group flex-wrap"
                   >
                     <div className="absolute inset-0 bg-[url('/noise.png')] opacity-20 mix-blend-overlay group-hover:opacity-30 transition-opacity"></div>
-                    <Play className="w-5 h-5" /> 자동 학습 시작 (비용: 1 <Zap className="w-4 h-4 inline" />)
+                    <Play className="w-5 h-5" /> 자동 학습 시작 (1000판, 비용: 1 <Zap className="w-4 h-4 inline" />)
                   </button>
                 ) : (
                   <button 
@@ -410,13 +416,22 @@ export default function StudioPage() {
         </div>
       </div>
       
-      {/* Right Panel: Board */}
+      {/* Right Panel: Board or Training Status */}
       <div className="flex flex-col items-center justify-start pt-4 w-full md:w-auto">
-        <GomokuBoard 
-          board={board} 
-          onMove={mode === 'play' ? handleUserMove : undefined} 
-          disabled={gameOver || isAutoTraining || (mode === 'play' && currentPlayer === 2)} 
-        />
+        {isAutoTraining ? (
+          <div className="w-[500px] h-[500px] bg-slate-800 rounded-lg flex flex-col items-center justify-center border-4 border-emerald-500/30 shadow-2xl">
+            <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+            <h2 className="text-2xl font-bold text-white mb-2">슈퍼컴퓨터 모드 가동 중...</h2>
+            <div className="text-5xl font-black text-emerald-400 mb-4">{sessionAutoEpisodes} / {MAX_AUTO_EPISODES}</div>
+            <p className="text-slate-400">화면 렌더링을 중지하고 백그라운드에서 AI가 자기 자신과 대국하며 진화하고 있습니다.</p>
+          </div>
+        ) : (
+          <GomokuBoard 
+            board={board} 
+            onMove={mode === 'play' ? handleUserMove : undefined} 
+            disabled={gameOver || (mode === 'play' && currentPlayer === 2)} 
+          />
+        )}
       </div>
 
     </div>

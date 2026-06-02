@@ -33,8 +33,8 @@ export function useTokens() {
 
     if (newManual % 10 === 0) {
       newArena += 1;
-      newAuto += 1000;
-      alert("🎉 10판 달성 보상!\n아레나 토큰 1개와 오토 토큰 1000개를 획득하셨습니다!");
+      newAuto += 1;
+      alert("🎉 10판 달성 보상!\n아레나 토큰 1개와 오토 토큰 1개를 획득하셨습니다!");
     }
 
     saveState(newManual, newArena, newAuto);
