@@ -25,14 +25,14 @@ export default function GomokuBoard({ board, onMove, disabled, thinkingMoves = [
           <React.Fragment key={`line-${i}`}>
             {/* Horizontal lines */}
             <line 
-              x1={16} y1={16 + i * 32} 
-              x2={BOARD_SIZE * 32 - 16} y2={16 + i * 32} 
+              x1={32} y1={32 + i * 32} 
+              x2={BOARD_SIZE * 32} y2={32 + i * 32} 
               stroke="black" strokeWidth="1" 
             />
             {/* Vertical lines */}
             <line 
-              x1={16 + i * 32} y1={16} 
-              x2={16 + i * 32} y2={BOARD_SIZE * 32 - 16} 
+              x1={32 + i * 32} y1={32} 
+              x2={32 + i * 32} y2={BOARD_SIZE * 32} 
               stroke="black" strokeWidth="1" 
             />
           </React.Fragment>

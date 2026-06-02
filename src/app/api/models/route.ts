@@ -4,7 +4,6 @@ import { createClient } from '@vercel/postgres';
 export async function GET() {
   try {
     const dbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
-    // Fallback if Vercel Postgres/Neon is not yet configured by the user
     if (!dbUrl) {
       console.warn("Database URL is not set. Returning mock data.");
       return NextResponse.json([
@@ -17,15 +16,17 @@ export async function GET() {
     const client = createClient({ connectionString: dbUrl });
     await client.connect();
 
-    // Try to query the real database
-    const { rows } = await client.sql`SELECT * FROM models ORDER BY created_at DESC;`;
+    // Do not return the password field to the client
+    const { rows } = await client.sql`
+      SELECT id, name, author, winrate, downloads, model_url, created_at 
+      FROM models 
+      ORDER BY created_at DESC;
+    `;
     
-    // Close the connection explicitly when using createClient (if needed, though in edge/serverless it's often cached)
     await client.end();
     
     return NextResponse.json(rows);
   } catch (error) {
-    // If table doesn't exist yet (first run), return empty or mock
     console.error('Database error:', error);
     return NextResponse.json([], { status: 200 });
   }
@@ -38,17 +39,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: "Mock upload successful (No DB configured)" });
     }
 
-    const { name, author, winrate, modelUrl } = await request.json();
+    const { name, author, password, winrate, modelUrl } = await request.json();
     
     const client = createClient({ connectionString: dbUrl });
     await client.connect();
 
-    // Ensure table exists
+    // Ensure table exists with password column
     await client.sql`
       CREATE TABLE IF NOT EXISTS models (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         author VARCHAR(255) NOT NULL,
+        password VARCHAR(255) DEFAULT '',
         winrate NUMERIC DEFAULT 0,
         downloads INTEGER DEFAULT 0,
         model_url TEXT,
@@ -56,10 +58,17 @@ export async function POST(request: Request) {
       );
     `;
 
+    // Try to add password column if migrating from old schema
+    try {
+      await client.sql`ALTER TABLE models ADD COLUMN password VARCHAR(255) DEFAULT '';`;
+    } catch (e) {
+      // Column already exists, ignore
+    }
+
     const result = await client.sql`
-      INSERT INTO models (name, author, winrate, model_url) 
-      VALUES (${name}, ${author}, ${winrate}, ${modelUrl || null})
-      RETURNING *;
+      INSERT INTO models (name, author, password, winrate, model_url) 
+      VALUES (${name}, ${author}, ${password || ''}, ${winrate}, ${modelUrl || null})
+      RETURNING id, name, author, winrate, downloads, model_url, created_at;
     `;
 
     await client.end();

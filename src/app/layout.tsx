@@ -18,7 +18,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <head>
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2745624150105717" crossOrigin="anonymous"></script>
+      </head>
+      <body className={`${inter.className} bg-slate-900 text-white min-h-screen flex flex-col`}>
         <LanguageProvider>
           <Navbar />
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
