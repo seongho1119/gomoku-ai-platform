@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import GomokuBoard from '@/components/GomokuBoard';
 import { createEmptyBoard, checkWin, isBoardFull, Player, getAvailableMoves, BoardState } from '@/lib/gomoku';
 import { GomokuAI } from '@/lib/ai';
-import { RefreshCcw, Swords, User, Bot, Coins, Search, Shuffle } from 'lucide-react';
+import { RefreshCcw, Swords, User, Bot, Coins, Search, Shuffle, Loader2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useLanguage } from '@/context/LanguageContext';
 import { useTokens } from '@/hooks/useTokens';
@@ -19,7 +19,7 @@ interface Model {
   winrate: number;
 }
 
-export default function ArenaPage() {
+function ArenaContent() {
   const { t } = useLanguage();
   const tokens = useTokens();
   const searchParams = useSearchParams();
@@ -421,5 +421,13 @@ export default function ArenaPage() {
         />
       </div>
     </div>
+  );
+}
+
+export default function ArenaPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center items-center py-20"><Loader2 className="w-8 h-8 animate-spin text-emerald-500" /></div>}>
+      <ArenaContent />
+    </Suspense>
   );
 }
