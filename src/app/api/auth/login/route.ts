@@ -1,23 +1,8 @@
 import { NextResponse } from 'next/server';
-import { createPool } from '@vercel/postgres';
+import { sql } from '@vercel/postgres';
 import bcrypt from 'bcryptjs';
 
-function getPool() {
-  const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
-  if (!connectionString) return null;
-  return createPool({ connectionString });
-}
-
-async function ensureUsersTable(pool: ReturnType<typeof createPool>) {
-  await pool.sql`
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      username VARCHAR(50) UNIQUE NOT NULL,
-      password_hash VARCHAR(255) NOT NULL,
-      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-    );
-  `;
-}
+const hasDb = !!(process.env.POSTGRES_URL || process.env.DATABASE_URL);
 
 export async function POST(request: Request) {
   try {
@@ -27,15 +12,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '아이디와 비밀번호를 입력하세요.' }, { status: 400 });
     }
 
-    const pool = getPool();
-    if (!pool) {
+    if (!hasDb) {
       // DB 없음 — 개발 환경 mock
       return NextResponse.json({ success: true, userId: 1, username: username.trim() });
     }
 
-    await ensureUsersTable(pool);
+    await sql`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
 
-    const { rows } = await pool.sql`
+    const { rows } = await sql`
       SELECT id, username, password_hash FROM users
       WHERE username = ${username.trim()};
     `;

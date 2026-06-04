@@ -1,12 +1,8 @@
 import { NextResponse } from 'next/server';
-import { createPool } from '@vercel/postgres';
+import { sql } from '@vercel/postgres';
 import bcrypt from 'bcryptjs';
 
-function getPool() {
-  const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
-  if (!connectionString) return null;
-  return createPool({ connectionString });
-}
+const hasDb = !!(process.env.POSTGRES_URL || process.env.DATABASE_URL);
 
 export async function POST(request: Request) {
   try {
@@ -25,14 +21,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '비밀번호는 4자 이상이어야 합니다.' }, { status: 400 });
     }
 
-    const pool = getPool();
-    if (!pool) {
+    if (!hasDb) {
       // DB 없는 환경: 임시 모의 응답
-      return NextResponse.json({ success: true, userId: 1, username });
+      return NextResponse.json({ success: true, userId: 1, username: username.trim() });
     }
 
     // users 테이블 생성 (없을 경우)
-    await pool.sql`
+    await sql`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
@@ -43,7 +38,7 @@ export async function POST(request: Request) {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const { rows } = await pool.sql`
+    const { rows } = await sql`
       INSERT INTO users (username, password_hash)
       VALUES (${username.trim()}, ${passwordHash})
       RETURNING id, username;
@@ -55,6 +50,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '이미 사용 중인 아이디입니다.' }, { status: 409 });
     }
     console.error('Register Error:', error);
-    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 });
+    return NextResponse.json({ error: `서버 오류가 발생했습니다: ${error.message}` }, { status: 500 });
   }
 }

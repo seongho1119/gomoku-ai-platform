@@ -204,44 +204,7 @@ export default function StudioPage() {
               </div>
             )}
 
-            {/* 연산 장치 */}
-            <div className="bg-slate-800/50 p-3 sm:p-4 rounded-xl mb-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="font-bold text-slate-300 text-sm flex items-center gap-1.5">
-                  <Cpu className="w-4 h-4" /> 연산 장치
-                </span>
-                {/* 현재 상태 배지 */}
-                <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 ${
-                  training.currentBackend === 'webgpu'
-                    ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
-                    : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                }`}>
-                  {training.currentBackend === 'webgpu' ? '🔥 GPU+CPU' : '⚡ CPU 전코어'}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {training.backendOptions.map(opt => {
-                  const available = training.availableBackends[opt.id];
-                  const active = training.currentBackend === opt.id;
-                  return (
-                    <button key={opt.id} onClick={() => training.changeBackend(opt.id)}
-                      disabled={!available || training.isAutoTraining}
-                      className={`flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                        active
-                          ? 'bg-orange-500/20 border-orange-500/50 text-orange-200'
-                          : available
-                            ? 'bg-slate-700/40 border-slate-600/40 text-slate-300 hover:border-slate-500'
-                            : 'opacity-25 cursor-not-allowed border-transparent'
-                      }`}>
-                      <span className="text-base">{opt.icon}</span>
-                      <span className="font-bold">{opt.label}</span>
-                      <span className="text-[10px] font-normal text-slate-400 leading-tight">{opt.sublabel}</span>
-                      {!available && <span className="text-[9px] text-red-400">미지원</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+
 
 
             {/* 성능 설정 */}
