@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import { LanguageProvider } from "@/context/LanguageContext";
+import { TrainingProvider } from "@/context/TrainingContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -23,10 +24,12 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} bg-slate-900 text-white min-h-screen flex flex-col`}>
         <LanguageProvider>
-          <Navbar />
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
-            {children}
-          </main>
+          <TrainingProvider>
+            <Navbar />
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+              {children}
+            </main>
+          </TrainingProvider>
         </LanguageProvider>
       </body>
     </html>

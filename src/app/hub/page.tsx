@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Star, Loader2, Play, Lock, ChevronRight, Shuffle, Swords, User, Bot, Coins, ArrowLeft, RefreshCcw } from 'lucide-react';
+import { Star, Loader2, Play, Lock, ChevronRight, Shuffle, Swords, User, Bot, Coins, ArrowLeft, RefreshCcw, Trash2 } from 'lucide-react';
 import GomokuBoard from '@/components/GomokuBoard';
 import { createEmptyBoard, checkWin, isBoardFull, Player, getAvailableMoves, BoardState } from '@/lib/gomoku';
 import { GomokuAI } from '@/lib/ai';
 import confetti from 'canvas-confetti';
 import { useTokens } from '@/hooks/useTokens';
+import { useTraining } from '@/context/TrainingContext';
+import { useAuth } from '@/hooks/useAuth';
 
 type HubView = 'list' | 'battle';
 type BattleMode = 'me_vs_hubai' | 'myai_vs_hubai';
@@ -21,13 +23,21 @@ interface Model {
 
 export default function HubPage() {
   const tokens = useTokens();
+  const training = useTraining();
+  const { user } = useAuth();
   
   // Hub List State
   const [view, setView] = useState<HubView>('list');
   const [models, setModels] = useState<Model[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Password Modal State
+  // Delete Modal State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  
+  // Password Modal State (legacy verify)
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [verifying, setVerifying] = useState(false);
@@ -43,8 +53,8 @@ export default function HubPage() {
   const [matchRunning, setMatchRunning] = useState(false);
   const [scores, setScores] = useState({ me: 0, ai: 0, myai: 0, hubai: 0 });
 
-  // AIs
-  const myAiRef = useRef<GomokuAI | null>(null);
+  // AIs — myAiRef는 TrainingContext의 전역 AI를 사용
+  const myAiRef = training.aiRef;
   const hubAiRef = useRef<GomokuAI | null>(null);
   const matchHistoryRef = useRef<{board: number[], player: Player}[]>([]);
 
@@ -59,13 +69,35 @@ export default function HubPage() {
       } finally {
         setLoading(false);
       }
-
-      // Load My AI in background for battles
-      myAiRef.current = new GomokuAI();
-      await myAiRef.current.loadMemory();
+      // myAiRef는 이미 TrainingContext에서 로드됨 → 별도 로드 불필요
     }
     init();
   }, []);
+
+  const handleDelete = async () => {
+    if (!user || !deletePassword.trim()) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      const res = await fetch('/api/models', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user.username, password: deletePassword }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setModels(prev => prev.filter(m => m.author !== user.username));
+        setShowDeleteModal(false);
+        setDeletePassword('');
+      } else {
+        setDeleteError(data.error || '삭제 실패');
+      }
+    } catch {
+      setDeleteError('서버 연결 오류');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const openContinueTraining = (model: Model) => {
     setSelectedEnemy(model);
@@ -179,10 +211,7 @@ export default function HubPage() {
   const runAutoMatch = async () => {
     if (!myAiRef.current || !hubAiRef.current || matchRunning || battleMode !== 'myai_vs_hubai') return;
 
-    if (!tokens.consumeArenaToken()) {
-      alert("아레나 토큰이 부족합니다! 스튜디오에서 수동 플레이를 통해 토큰을 획득하세요.");
-      return;
-    }
+    // 토큰 제한 없음
     
     resetMatch();
     setMatchRunning(true);
@@ -286,7 +315,18 @@ export default function HubPage() {
                   <Bot className="w-4 h-4" /> 내 파트너
                 </div>
               </div>
-              <div className="flex gap-2 mt-6">
+              {/* 학습량 표시 */}
+              <div className="flex items-center gap-2 mt-2 mb-1">
+                <div className="flex items-center gap-1.5 bg-slate-700/60 px-3 py-1.5 rounded-lg text-xs">
+                  <span className={`w-1.5 h-1.5 rounded-full ${training.isAutoTraining ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                  <span className="text-slate-400">자동 학습</span>
+                  <span className="font-bold text-emerald-400">{training.sessionAutoEpisodes.toLocaleString()}판</span>
+                </div>
+                {training.isAutoTraining && (
+                  <span className="text-xs text-emerald-400 animate-pulse">학습 중...</span>
+                )}
+              </div>
+              <div className="flex gap-2 mt-4">
                 <button 
                   onClick={() => {
                     setSelectedEnemy({ id: 0, name: '내 AI', author: '', winrate: 0, downloads: 0 });
@@ -310,31 +350,69 @@ export default function HubPage() {
             {/* Community Models */}
             {models.map(model => (
               <div key={model.id} className="glass-panel p-6 rounded-2xl flex flex-col">
-                <div className="flex justify-between items-start mb-4 gap-2">
+                <div className="flex justify-between items-start mb-2 gap-2">
                   <div className="overflow-hidden">
-                    <h2 className="text-xl font-bold truncate">{model.name}</h2>
+                    <h2 className="text-xl font-bold truncate">{model.author}</h2>
                   </div>
-                  <div className="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-sm font-bold flex items-center gap-1 whitespace-nowrap shrink-0">
-                    <Star className="w-4 h-4" /> {Math.round(model.winrate)}% 승률
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-sm font-bold flex items-center gap-1">
+                      <Star className="w-4 h-4" /> {Math.round(model.winrate)}%
+                    </div>
+                    {/* 삭제 버튼: 본인 AI만 */}
+                    {user?.username === model.author && (
+                      <button
+                        onClick={() => { setDeleteError(''); setDeletePassword(''); setShowDeleteModal(true); }}
+                        className="text-slate-500 hover:text-red-400 transition-colors p-1"
+                        title="내 AI 삭제"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row gap-2 mt-6">
+                <div className="flex flex-col sm:flex-row gap-2 mt-4">
                   <button 
                     onClick={() => startBattle(model)}
                     className="flex-1 bg-violet-600 hover:bg-violet-500 text-white py-3 px-3 rounded-xl font-bold text-sm text-center flex items-center justify-center gap-1 transition-colors"
                   >
                     <Play className="w-4 h-4" /> 대결하기
                   </button>
-                  <button 
-                    onClick={() => openContinueTraining(model)}
-                    className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 px-3 rounded-xl font-bold text-sm flex items-center justify-center gap-1 transition-colors"
-                  >
-                    <Lock className="w-4 h-4" /> 이어서 학습하기
-                  </button>
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Delete Modal */}
+        {showDeleteModal && user && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+            <div className="bg-slate-900 border border-white/10 p-6 rounded-2xl max-w-sm w-full shadow-2xl">
+              <h3 className="text-xl font-bold mb-1 text-red-400">🗑️ AI 삭제</h3>
+              <p className="text-slate-400 text-sm mb-5">
+                <span className="text-white font-bold">{user.username}</span>의 AI를 영구 삭제합니다.이작업은 여 없습니다.
+              </p>
+              <input
+                type="password"
+                placeholder="비밀번호 확인..."
+                value={deletePassword}
+                onChange={e => setDeletePassword(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleDelete()}
+                autoFocus
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white mb-2 focus:outline-none focus:border-red-500 transition-colors"
+              />
+              {deleteError && <p className="text-red-400 text-xs mb-3">{deleteError}</p>}
+              <div className="flex gap-3 mt-4">
+                <button onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-bold transition-colors">
+                  취소
+                </button>
+                <button onClick={handleDelete} disabled={deleting || !deletePassword.trim()}
+                  className="flex-1 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-1 transition-colors">
+                  {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} 삭제
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

@@ -1,31 +1,38 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@vercel/postgres';
+import { createPool } from '@vercel/postgres';
+import bcrypt from 'bcryptjs';
 
 export async function POST(request: Request) {
   try {
-    const dbUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
-    if (!dbUrl) {
-      // Mock logic for development
-      return NextResponse.json({ success: true, message: "Mock verify successful" });
+    const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+    if (!connectionString) {
+      return NextResponse.json({ success: true, message: 'Mock verify successful' });
     }
 
     const { id, password } = await request.json();
-    
-    const client = createClient({ connectionString: dbUrl });
-    await client.connect();
 
-    // Check if password matches
-    const { rows } = await client.sql`
-      SELECT id FROM models 
-      WHERE id = ${id} AND password = ${password};
+    if (!id || !password) {
+      return NextResponse.json({ success: false, error: 'id와 password는 필수입니다.' }, { status: 400 });
+    }
+
+    const pool = createPool({ connectionString });
+
+    const { rows } = await pool.sql`
+      SELECT password_hash FROM models 
+      WHERE id = ${id};
     `;
 
-    await client.end();
+    if (rows.length === 0) {
+      return NextResponse.json({ success: false, error: '모델을 찾을 수 없습니다.' }, { status: 404 });
+    }
 
-    if (rows.length > 0) {
+    const storedHash = rows[0].password_hash;
+    const isMatch = await bcrypt.compare(password, storedHash);
+
+    if (isMatch) {
       return NextResponse.json({ success: true });
     } else {
-      return NextResponse.json({ success: false, error: "Incorrect password" }, { status: 401 });
+      return NextResponse.json({ success: false, error: '비밀번호가 일치하지 않습니다.' }, { status: 401 });
     }
 
   } catch (error: any) {

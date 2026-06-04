@@ -1,11 +1,57 @@
 import * as tf from '@tensorflow/tfjs';
-import { BoardState, BOARD_SIZE, getAvailableMoves, checkWin, Player } from './gomoku';
+import { BoardState, BOARD_SIZE, getAvailableMoves, checkWin, Player, createEmptyBoard } from './gomoku';
+
+/**
+ * 기존 돌 주변 2칸 이내의 빈 셀만 후보로 반환합니다.
+ * 빈 보드라면 중앙 셀을 반환합니다.
+ * 평균 후보 수: 225개 → ~20-35개로 감소
+ */
+function getCandidateMoves(board: BoardState): {row: number, col: number}[] {
+  const RADIUS = 2;
+  const center = Math.floor(BOARD_SIZE / 2);
+  const candidates = new Set<string>();
+  let hasStones = false;
+
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (board[r][c] !== 0) {
+        hasStones = true;
+        // 이 돌 주변 RADIUS 범위 내 빈 셀 추가
+        for (let dr = -RADIUS; dr <= RADIUS; dr++) {
+          for (let dc = -RADIUS; dc <= RADIUS; dc++) {
+            const nr = r + dr;
+            const nc = c + dc;
+            if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE && board[nr][nc] === 0) {
+              candidates.add(`${nr},${nc}`);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (!hasStones) {
+    // 빈 보드: 중앙 주변만 반환
+    return [{ row: center, col: center }];
+  }
+
+  if (candidates.size === 0) {
+    // 후보가 없으면 전체 빈 셀 fallback
+    return getAvailableMoves(board);
+  }
+
+  return Array.from(candidates).map(key => {
+    const [r, c] = key.split(',').map(Number);
+    return { row: r, col: c };
+  });
+}
 
 export type BrainSize = 'shallow' | 'standard' | 'deep';
 
 export class GomokuAI {
   model: tf.LayersModel;
   brainSize: BrainSize;
+  storageKey: string;
   
   // Personality Traits
   personality = {
@@ -14,8 +60,9 @@ export class GomokuAI {
     creativity: 1.0
   };
 
-  constructor(brainSize: BrainSize = 'standard') {
+  constructor(brainSize: BrainSize = 'standard', storageKey = 'gomoku-ai-brain') {
     this.brainSize = brainSize;
+    this.storageKey = storageKey;
     this.model = this.createModel(brainSize);
   }
 
@@ -46,39 +93,38 @@ export class GomokuAI {
 
   async saveMemory() {
     try {
-      await this.model.save('localstorage://gomoku-ai-brain');
-      // Also save personality
-      localStorage.setItem('gomoku-ai-personality', JSON.stringify(this.personality));
-      localStorage.setItem('gomoku-ai-brainSize', this.brainSize);
+      await this.model.save(`localstorage://${this.storageKey}`);
+      localStorage.setItem(`${this.storageKey}-personality`, JSON.stringify(this.personality));
+      localStorage.setItem(`${this.storageKey}-brainSize`, this.brainSize);
       return true;
     } catch (e) {
-      console.error("Failed to save AI memory:", e);
+      console.error('Failed to save AI memory:', e);
       return false;
     }
   }
 
   async loadMemory() {
     try {
-      const savedModel = await tf.loadLayersModel('localstorage://gomoku-ai-brain');
+      const savedModel = await tf.loadLayersModel(`localstorage://${this.storageKey}`);
       this.model = savedModel as tf.LayersModel;
       this.model.compile({
         optimizer: tf.train.adam(0.001),
         loss: 'meanSquaredError'
       });
       
-      const savedPersonality = localStorage.getItem('gomoku-ai-personality');
+      const savedPersonality = localStorage.getItem(`${this.storageKey}-personality`);
       if (savedPersonality) {
         this.personality = JSON.parse(savedPersonality);
       }
       
-      const savedBrainSize = localStorage.getItem('gomoku-ai-brainSize');
+      const savedBrainSize = localStorage.getItem(`${this.storageKey}-brainSize`);
       if (savedBrainSize) {
         this.brainSize = savedBrainSize as BrainSize;
       }
       
       return true;
     } catch (e) {
-      console.log("No saved memory found, using fresh brain.");
+      console.log(`No saved memory found for key '${this.storageKey}', using fresh brain.`);
       return false;
     }
   }
@@ -166,7 +212,27 @@ export class GomokuAI {
   }
 
   async predictTopMoves(board: BoardState, player: Player, topN: number = 3): Promise<{row: number, col: number, score: number}[]> {
-    const moves = getAvailableMoves(board);
+    // 승리/즉시 차단 수 우선 확인 (필승 수 항상 선택)
+    const allMoves = getAvailableMoves(board);
+    for (const move of allMoves) {
+      board[move.row][move.col] = player;
+      if (checkWin(board, move.row, move.col, player)) {
+        board[move.row][move.col] = 0;
+        return [{ row: move.row, col: move.col, score: 1.0 }];
+      }
+      board[move.row][move.col] = 0;
+    }
+    const opponent = player === 1 ? 2 : 1;
+    for (const move of allMoves) {
+      board[move.row][move.col] = opponent;
+      if (checkWin(board, move.row, move.col, opponent)) {
+        board[move.row][move.col] = 0;
+        return [{ row: move.row, col: move.col, score: 0.9 }];
+      }
+      board[move.row][move.col] = 0;
+    }
+
+    const moves = getCandidateMoves(board);
     if (moves.length === 0) return [];
 
     const inputsArray = [];
@@ -207,7 +273,7 @@ export class GomokuAI {
     return { row: -1, col: -1 };
   }
 
-  async train(experiences: {board: number[], reward: number}[]) {
+  async train(experiences: {board: number[], reward: number}[], batchSize = 32) {
     if (experiences.length === 0) return;
 
     const xs = tf.tensor2d(experiences.map(e => e.board));
@@ -215,11 +281,79 @@ export class GomokuAI {
 
     await this.model.fit(xs, ys, {
       epochs: 1,
-      batchSize: 32,
+      batchSize,
       verbose: 0
     });
 
     xs.dispose();
     ys.dispose();
   }
+
+  /**
+   * 신규 AI에게 오목의 기본 규칙을 주입합니다.
+   * "5개 연속 = 승리" 패턴을 synthetic 데이터로 사전 학습시켜
+   * AI가 무작위 수가 아닌 방향성 있는 수를 두도록 합니다.
+   */
+  async teachBasicRules() {
+    console.log('[AI] 기본 규칙 주입 시작: 5개 연속 = 승리');
+    const experiences: {board: number[], reward: number}[] = [];
+    const directions = [[0,1],[1,0],[1,1],[1,-1]] as const;
+
+    for (const [dr, dc] of directions) {
+      for (let startR = 0; startR < BOARD_SIZE; startR += 2) {
+        for (let startC = 0; startC < BOARD_SIZE; startC += 2) {
+          // 5칸 위치 계산
+          const pos5: [number, number][] = [];
+          let valid = true;
+          for (let i = 0; i < 5; i++) {
+            const r = startR + dr * i;
+            const c = startC + dc * i;
+            if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) { valid = false; break; }
+            pos5.push([r, c]);
+          }
+          if (!valid || pos5.length < 5) continue;
+
+          // ① 내가 5개 연속 → 최고 보상 (+1.0)
+          const bWin = createEmptyBoard();
+          pos5.forEach(([r,c]) => bWin[r][c] = 1);
+          experiences.push({ board: this.flattenBoard(bWin, 1), reward: 1.0 });
+
+          // ② 상대가 5개 연속 → 최악 (-1.0)
+          const bLose = createEmptyBoard();
+          pos5.forEach(([r,c]) => bLose[r][c] = 2);
+          experiences.push({ board: this.flattenBoard(bLose, 1), reward: -1.0 });
+
+          // ③ 내가 4개 연속 (한 칸 열려 있음) → 거의 승리 (+0.75)
+          const b4 = createEmptyBoard();
+          pos5.slice(0, 4).forEach(([r,c]) => b4[r][c] = 1);
+          experiences.push({ board: this.flattenBoard(b4, 1), reward: 0.75 });
+
+          // ④ 상대가 4개 연속 → 즉시 차단 필요 (-0.75)
+          const b4opp = createEmptyBoard();
+          pos5.slice(0, 4).forEach(([r,c]) => b4opp[r][c] = 2);
+          experiences.push({ board: this.flattenBoard(b4opp, 1), reward: -0.75 });
+
+          // ⑤ 내가 3개 연속 → 좋은 형태 (+0.4)
+          const b3 = createEmptyBoard();
+          pos5.slice(0, 3).forEach(([r,c]) => b3[r][c] = 1);
+          experiences.push({ board: this.flattenBoard(b3, 1), reward: 0.4 });
+
+          // ⑥ 상대가 3개 연속 → 견제 필요 (-0.4)
+          const b3opp = createEmptyBoard();
+          pos5.slice(0, 3).forEach(([r,c]) => b3opp[r][c] = 2);
+          experiences.push({ board: this.flattenBoard(b3opp, 1), reward: -0.4 });
+        }
+      }
+    }
+
+    // 여러 에폭 반복 학습 (규칙 주입)
+    for (let epoch = 0; epoch < 5; epoch++) {
+      const shuffled = [...experiences].sort(() => Math.random() - 0.5);
+      await this.train(shuffled);
+    }
+
+    await this.saveMemory();
+    console.log(`[AI] 기본 규칙 주입 완료: ${experiences.length}개 예시, 5 에폭`);
+  }
 }
+
