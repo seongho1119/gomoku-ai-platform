@@ -233,19 +233,18 @@ async function setupWorkerCores(ai: GomokuAI) {
   _onWorkerStates([..._workerStates]);
 
   // CPU 코어 수에 따라 한 틱당 도는 게임 수(gamesPerBatch)와 CPU 양보 시간(yieldMs)을 동적으로 조절
-  // 32코어 등 고성능 장비에서 대규모 구동 시 연산 병목 및 메인 스레드 락다운을 예방
-  let gamesPerBatch = 5;
-  let yieldMs = 10;
+  // 메인 스레드 프리징은 Worker가 보내는 잦은 메시지(postMessage) 오버헤드에서 발생합니다.
+  // 코어가 많을수록 한 번에 많은 게임을 묶어서 처리(Batch 증가)하여 메시지 송신 빈도를 대폭 줄임과 동시에 
+  // yieldMs를 0 또는 1로 최소화하여 CPU를 100% 한계까지 갈구는 극한의 SPS 성능을 끌어냅니다.
+  let gamesPerBatch = 10;
+  let yieldMs = 1;
   
   if (_numWorkers >= 24) {
-    gamesPerBatch = 1;
-    yieldMs = 50;
+    gamesPerBatch = 40; // 32코어 등 극한 환경에서는 한 번에 40게임씩 묶어 보고
   } else if (_numWorkers >= 12) {
-    gamesPerBatch = 2;
-    yieldMs = 30;
+    gamesPerBatch = 30;
   } else if (_numWorkers >= 6) {
-    gamesPerBatch = 3;
-    yieldMs = 20;
+    gamesPerBatch = 20;
   }
 
   for (let i = 0; i < _numWorkers; i++) {
