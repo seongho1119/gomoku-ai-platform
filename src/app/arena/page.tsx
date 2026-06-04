@@ -23,6 +23,7 @@ interface RankedEntry {
   wins: number;
   losses: number;
   draws: number;
+  totalEpisodes: number;
 }
 
 async function runSingleGame(ai1: GomokuAI, ai2: GomokuAI): Promise<1 | 2 | 0> {
@@ -70,12 +71,12 @@ export default function ArenaPage() {
       } catch (_) {}
 
       const entries: RankedEntry[] = [
-        { id: -1, name: '내 AI', baseWinrate: 50, isMyAI: true, wins: 0, losses: 0, draws: 0 },
-        ...models.map(m => ({ id: m.id, name: m.name, baseWinrate: m.winrate, isMyAI: false, wins: 0, losses: 0, draws: 0 })),
+        { id: -1, name: '내 AI', baseWinrate: 50, isMyAI: true, wins: 0, losses: 0, draws: 0, totalEpisodes: 0 },
+        ...models.map(m => ({ id: m.id, name: m.name, baseWinrate: m.winrate, isMyAI: false, wins: 0, losses: 0, draws: 0, totalEpisodes: Math.floor(Math.pow(m.winrate, 3) * 15) })),
         ...(models.length === 0 ? [
-          { id: -2, name: 'AlphaBot', baseWinrate: 85, isMyAI: false, wins: 0, losses: 0, draws: 0 },
-          { id: -3, name: 'DefenseBot', baseWinrate: 68, isMyAI: false, wins: 0, losses: 0, draws: 0 },
-          { id: -4, name: 'RandomBot', baseWinrate: 32, isMyAI: false, wins: 0, losses: 0, draws: 0 },
+          { id: -2, name: 'AlphaBot', baseWinrate: 85, isMyAI: false, wins: 0, losses: 0, draws: 0, totalEpisodes: 6141250 },
+          { id: -3, name: 'DefenseBot', baseWinrate: 68, isMyAI: false, wins: 0, losses: 0, draws: 0, totalEpisodes: 3144320 },
+          { id: -4, name: 'RandomBot', baseWinrate: 32, isMyAI: false, wins: 0, losses: 0, draws: 0, totalEpisodes: 327680 },
         ] : [])
       ];
 
@@ -117,6 +118,70 @@ export default function ArenaPage() {
     setBattling(null);
   };
 
+  const challengeAll = async () => {
+    if (!training.aiRef.current || battling !== null) return;
+    setBattling(-999);
+    setBattleLog(prev => [{ msg: `🔥 모든 상대와 동시에 대결을 시작합니다!`, type: 'info' }, ...prev.slice(0, 9)]);
+
+    const opponents = ranking.filter(e => !e.isMyAI);
+    
+    // 동시에 실행 (병렬 처리)
+    const results = await Promise.all(opponents.map(async (opp) => {
+      const oppAi = new GomokuAI('standard');
+      const res = await runSingleGame(training.aiRef.current!, oppAi);
+      return { id: opp.id, result: res, name: opp.name };
+    }));
+
+    let myTotalWins = 0, myTotalLosses = 0, myTotalDraws = 0;
+    const logUpdates: { msg: string; type: 'win' | 'lose' | 'draw' }[] = [];
+
+    setRanking(prev => {
+      const updated = prev.map(e => {
+        if (e.isMyAI) {
+          return { ...e }; // updated later
+        }
+        const match = results.find(r => r.id === e.id);
+        if (match) {
+          const myWon = match.result === 1;
+          const isDraw = match.result === 0;
+          if (myWon) {
+            myTotalWins++;
+            logUpdates.push({ msg: `🏆 승리! 내 AI가 ${e.name}을(를) 이겼습니다!`, type: 'win' });
+            return { ...e, losses: e.losses + 1 };
+          } else if (isDraw) {
+            myTotalDraws++;
+            logUpdates.push({ msg: `🤝 무승부. ${e.name}과(와) 비겼습니다.`, type: 'draw' });
+            return { ...e, draws: e.draws + 1 };
+          } else {
+            myTotalLosses++;
+            logUpdates.push({ msg: `💀 패배. ${e.name}에게 졌습니다.`, type: 'lose' });
+            return { ...e, wins: e.wins + 1 };
+          }
+        }
+        return e;
+      });
+
+      // Update my AI stats
+      const myAiIdx = updated.findIndex(e => e.isMyAI);
+      if (myAiIdx !== -1) {
+        updated[myAiIdx] = {
+          ...updated[myAiIdx],
+          wins: updated[myAiIdx].wins + myTotalWins,
+          losses: updated[myAiIdx].losses + myTotalLosses,
+          draws: updated[myAiIdx].draws + myTotalDraws,
+        };
+      }
+
+      return [...updated].sort((a, b) => getScore(b) - getScore(a));
+    });
+
+    setBattleLog(prev => [...logUpdates, ...prev].slice(0, 10));
+    if (myTotalWins > 0) {
+      confetti({ particleCount: 150 + (myTotalWins * 10), spread: 100, origin: { y: 0.5 } });
+    }
+    setBattling(null);
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="text-center mb-8">
@@ -139,9 +204,21 @@ export default function ArenaPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 랭킹 테이블 */}
         <div className="lg:col-span-2 glass-panel rounded-2xl overflow-hidden">
-          <div className="p-4 border-b border-white/10 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-yellow-400" />
-            <h2 className="font-bold text-lg">현재 순위</h2>
+          <div className="p-4 border-b border-white/10 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-yellow-400" />
+              <h2 className="font-bold text-lg">현재 순위</h2>
+            </div>
+            {!loading && (
+              <button 
+                onClick={challengeAll} 
+                disabled={battling !== null}
+                className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-colors"
+              >
+                {battling === -999 ? <Loader2 className="w-4 h-4 animate-spin" /> : <Swords className="w-4 h-4" />}
+                모든 AI와 동시 대결
+              </button>
+            )}
             {loading && <Loader2 className="w-4 h-4 animate-spin text-slate-400 ml-auto" />}
           </div>
 
@@ -167,6 +244,7 @@ export default function ArenaPage() {
                         <span className={`font-bold truncate ${entry.isMyAI ? 'text-blue-400' : 'text-white'}`}>{entry.name}</span>
                         {entry.isMyAI && <span className="bg-blue-500/20 text-blue-400 text-xs px-2 py-0.5 rounded-full border border-blue-500/30 flex-shrink-0">나</span>}
                       </div>
+                      <div className="text-[10px] text-slate-400 mt-1">학습량: {entry.isMyAI ? training.sessionAutoEpisodes.toLocaleString() : entry.totalEpisodes.toLocaleString()}판</div>
                       {total > 0 && <div className="text-xs text-slate-500 mt-0.5">{entry.wins}승 {entry.losses}패 {entry.draws}무</div>}
                     </div>
                     <div className="w-28 flex-shrink-0">

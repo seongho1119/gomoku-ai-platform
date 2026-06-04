@@ -82,7 +82,10 @@ export function updateTrainingCallbacks(
   if (onWorkerStates) _onWorkerStates = onWorkerStates;
 }
 
-export function setVisualizationMode(enabled: boolean) { _visualize = enabled; }
+export function setVisualizationMode(enabled: boolean) { 
+  _visualize = enabled; 
+  _workers.forEach(w => w.postMessage({ type: 'update_params', isVisualize: enabled }));
+}
 export function isVisualizationOn(): boolean { return _visualize; }
 
 export function setHardwareParams(_yield: number, batchSize: number) {
@@ -173,6 +176,18 @@ function makeWorker(id: number, ai: GomokuAI): Worker {
         _workerStates[id].sps = processed;
         _workerStates[id].active = true;
       }
+      if (_visualize && data.board) {
+        // 1D array back to 2D
+        const size = 15;
+        const board2d = Array.from({ length: size }, () => new Array(size).fill(0));
+        for (let r = 0; r < size; r++) {
+          for (let c = 0; c < size; c++) {
+            const v = data.board[r * size + c];
+            board2d[r][c] = v === 1 ? 1 : v === -1 ? 2 : 0;
+          }
+        }
+        _onBoard(board2d as any);
+      }
       return;
     }
 
@@ -260,7 +275,8 @@ async function setupWorkerCores(ai: GomokuAI) {
         type: 'init',
         exploreRate: 0.2,
         gamesPerBatch,
-        yieldMs
+        yieldMs,
+        isVisualize: _visualize
       });
       _workers.push(w);
 
@@ -287,6 +303,7 @@ export function adjustWorkerCount(count: number, ai: GomokuAI) {
 
 export async function startBackgroundTraining(
   ai:         GomokuAI,
+  initialEpisodes: number,
   onProgress: ProgressCb,
   onComplete: CompleteCb,
   onBoard?:   BoardCb,
@@ -299,7 +316,7 @@ export async function startBackgroundTraining(
   }
 
   _running = true;
-  _episodes = 0;
+  _episodes = initialEpisodes;
   _epsWindowStart = Date.now();
   _epsWindowCount = 0;
   _currentEps     = 0;

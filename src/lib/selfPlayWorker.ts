@@ -154,23 +154,32 @@ let active = false;
 let exploreRate = 0.2;
 let gamesPerBatch = 10;
 let yieldMs = 10;
+let isVisualize = false;
 let localStepsAccum = 0;
 let lastReportTime = Date.now();
+
+// MessageChannel을 이용해 최소 4ms의 setTimeout 딜레이를 회피 (0ms 양보)
+const channel = new MessageChannel();
 
 function runInfiniteLoop() {
   active = true;
   localStepsAccum = 0;
   lastReportTime = Date.now();
 
-  function step() {
+  channel.port1.onmessage = () => {
     if (!active) return;
 
     // 동적으로 조율된 gamesPerBatch 만큼 대국을 시뮬레이션
     const experiences: Exp[] = [];
+    let lastBoard: number[] | null = null;
+    
     for (let g = 0; g < gamesPerBatch; g++) {
       const exp = playGame(exploreRate);
       experiences.push(...exp);
       localStepsAccum += exp.length;
+      if (isVisualize && g === gamesPerBatch - 1 && exp.length > 0) {
+        lastBoard = exp[exp.length - 1].board;
+      }
     }
 
     // 경험 전송 (Transferable)
@@ -190,21 +199,32 @@ function runInfiniteLoop() {
       );
     }
 
-    // 60ms 주기 성능 보고
+    // 60ms 주기 성능 보고 (시각화 보드 포함 가능)
     const now = Date.now();
     if (now - lastReportTime > 60) {
+      const msg: any = { type: 'performance', processedSteps: localStepsAccum };
+      if (isVisualize && lastBoard) {
+        msg.board = lastBoard; // 1D 배열
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (self as any).postMessage({ type: 'performance', processedSteps: localStepsAccum });
+      (self as any).postMessage(msg);
       localStepsAccum = 0;
       lastReportTime = now;
     }
 
-    // 설정된 yieldMs 만큼 대기하여 메인 루프/UI 스레드 숨통 확보
-    setTimeout(step, yieldMs);
-  }
+    // 설정된 yieldMs 만큼 대기
+    if (yieldMs <= 1) {
+      // 0~1ms일 경우 MessageChannel을 통해 즉각 이벤트 루프의 다음 틱으로 넘겨 100% CPU 활용
+      channel.port2.postMessage(null);
+    } else {
+      setTimeout(() => channel.port2.postMessage(null), yieldMs);
+    }
+  };
 
-  step();
+  // 루프 시작
+  channel.port2.postMessage(null);
 }
+
 
 self.onmessage = (e: MessageEvent) => {
   const data = e.data;
@@ -212,11 +232,13 @@ self.onmessage = (e: MessageEvent) => {
     exploreRate = data.exploreRate ?? 0.2;
     gamesPerBatch = data.gamesPerBatch ?? 10;
     yieldMs = data.yieldMs ?? 10;
+    isVisualize = data.isVisualize ?? false;
     active = false;
   } else if (data.type === 'update_params') {
     exploreRate = data.exploreRate ?? exploreRate;
     gamesPerBatch = data.gamesPerBatch ?? gamesPerBatch;
     yieldMs = data.yieldMs ?? yieldMs;
+    isVisualize = data.isVisualize ?? isVisualize;
   } else if (data.type === 'start') {
     if (!active) {
       runInfiniteLoop();

@@ -184,6 +184,7 @@ export function TrainingProvider({ children }: { children: ReactNode }) {
         setBrainSize(ai.brainSize);
         console.log(`[AI] '${storageKey}' 로드 완료`);
       }
+      setSessionAutoEpisodes(ai.totalEpisodes);
       aiRef.current = ai;
       setIsInitializing(false);
     };
@@ -253,7 +254,10 @@ export function TrainingProvider({ children }: { children: ReactNode }) {
     if (!aiRef.current) return false;
     if (isTrainingRunning()) {
       updateTrainingCallbacks(
-        (n) => setSessionAutoEpisodes(n),
+        (n) => { 
+          setSessionAutoEpisodes(n); 
+          if (aiRef.current) aiRef.current.totalEpisodes = n; 
+        },
         () => setIsAutoTraining(false),
         (b) => setLiveBoard(b),
         (e) => setEps(e),
@@ -264,7 +268,13 @@ export function TrainingProvider({ children }: { children: ReactNode }) {
     }
     const started = await startBackgroundTraining(
       aiRef.current,
-      (n) => { setSessionAutoEpisodes(n); setNumWorkersState(getNumWorkers()); setReplaySize(getReplaySize()); },
+      aiRef.current.totalEpisodes,
+      (n) => { 
+        setSessionAutoEpisodes(n);
+        if (aiRef.current) aiRef.current.totalEpisodes = n;
+        setNumWorkersState(getNumWorkers()); 
+        setReplaySize(getReplaySize()); 
+      },
       () => setIsAutoTraining(false),
       (b) => setLiveBoard(b),
       (e) => setEps(e),
@@ -272,7 +282,6 @@ export function TrainingProvider({ children }: { children: ReactNode }) {
     );
     if (started) {
       setIsAutoTraining(true);
-      setSessionAutoEpisodes(0);
       setEps(0);
       setLiveBoard(createEmptyBoard());
     }

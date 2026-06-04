@@ -52,6 +52,8 @@ export class GomokuAI {
   model: tf.LayersModel;
   brainSize: BrainSize;
   storageKey: string;
+  totalEpisodes: number = 0;
+
   
   // Personality Traits
   personality = {
@@ -96,6 +98,7 @@ export class GomokuAI {
       await this.model.save(`localstorage://${this.storageKey}`);
       localStorage.setItem(`${this.storageKey}-personality`, JSON.stringify(this.personality));
       localStorage.setItem(`${this.storageKey}-brainSize`, this.brainSize);
+      localStorage.setItem(`${this.storageKey}-episodes`, this.totalEpisodes.toString());
       return true;
     } catch (e) {
       console.error('Failed to save AI memory:', e);
@@ -120,6 +123,11 @@ export class GomokuAI {
       const savedBrainSize = localStorage.getItem(`${this.storageKey}-brainSize`);
       if (savedBrainSize) {
         this.brainSize = savedBrainSize as BrainSize;
+      }
+
+      const savedEpisodes = localStorage.getItem(`${this.storageKey}-episodes`);
+      if (savedEpisodes) {
+        this.totalEpisodes = parseInt(savedEpisodes, 10) || 0;
       }
       
       return true;
@@ -289,71 +297,5 @@ export class GomokuAI {
     ys.dispose();
   }
 
-  /**
-   * 신규 AI에게 오목의 기본 규칙을 주입합니다.
-   * "5개 연속 = 승리" 패턴을 synthetic 데이터로 사전 학습시켜
-   * AI가 무작위 수가 아닌 방향성 있는 수를 두도록 합니다.
-   */
-  async teachBasicRules() {
-    console.log('[AI] 기본 규칙 주입 시작: 5개 연속 = 승리');
-    const experiences: {board: number[], reward: number}[] = [];
-    const directions = [[0,1],[1,0],[1,1],[1,-1]] as const;
 
-    for (const [dr, dc] of directions) {
-      for (let startR = 0; startR < BOARD_SIZE; startR += 2) {
-        for (let startC = 0; startC < BOARD_SIZE; startC += 2) {
-          // 5칸 위치 계산
-          const pos5: [number, number][] = [];
-          let valid = true;
-          for (let i = 0; i < 5; i++) {
-            const r = startR + dr * i;
-            const c = startC + dc * i;
-            if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) { valid = false; break; }
-            pos5.push([r, c]);
-          }
-          if (!valid || pos5.length < 5) continue;
-
-          // ① 내가 5개 연속 → 최고 보상 (+1.0)
-          const bWin = createEmptyBoard();
-          pos5.forEach(([r,c]) => bWin[r][c] = 1);
-          experiences.push({ board: this.flattenBoard(bWin, 1), reward: 1.0 });
-
-          // ② 상대가 5개 연속 → 최악 (-1.0)
-          const bLose = createEmptyBoard();
-          pos5.forEach(([r,c]) => bLose[r][c] = 2);
-          experiences.push({ board: this.flattenBoard(bLose, 1), reward: -1.0 });
-
-          // ③ 내가 4개 연속 (한 칸 열려 있음) → 거의 승리 (+0.75)
-          const b4 = createEmptyBoard();
-          pos5.slice(0, 4).forEach(([r,c]) => b4[r][c] = 1);
-          experiences.push({ board: this.flattenBoard(b4, 1), reward: 0.75 });
-
-          // ④ 상대가 4개 연속 → 즉시 차단 필요 (-0.75)
-          const b4opp = createEmptyBoard();
-          pos5.slice(0, 4).forEach(([r,c]) => b4opp[r][c] = 2);
-          experiences.push({ board: this.flattenBoard(b4opp, 1), reward: -0.75 });
-
-          // ⑤ 내가 3개 연속 → 좋은 형태 (+0.4)
-          const b3 = createEmptyBoard();
-          pos5.slice(0, 3).forEach(([r,c]) => b3[r][c] = 1);
-          experiences.push({ board: this.flattenBoard(b3, 1), reward: 0.4 });
-
-          // ⑥ 상대가 3개 연속 → 견제 필요 (-0.4)
-          const b3opp = createEmptyBoard();
-          pos5.slice(0, 3).forEach(([r,c]) => b3opp[r][c] = 2);
-          experiences.push({ board: this.flattenBoard(b3opp, 1), reward: -0.4 });
-        }
-      }
-    }
-
-    // 여러 에폭 반복 학습 (규칙 주입)
-    for (let epoch = 0; epoch < 5; epoch++) {
-      const shuffled = [...experiences].sort(() => Math.random() - 0.5);
-      await this.train(shuffled);
-    }
-
-    await this.saveMemory();
-    console.log(`[AI] 기본 규칙 주입 완료: ${experiences.length}개 예시, 5 에폭`);
-  }
-}
 
