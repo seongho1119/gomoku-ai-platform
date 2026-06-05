@@ -31,10 +31,10 @@ export interface HwPreset {
 }
 
 export const HW_PRESETS: HwPreset[] = [
-  { id: 'eco',      label: '절약',  icon: '🐢', desc: '배치 16 (메모리 절약)',   yieldEvery: 0, batchSize: 16  },
-  { id: 'balanced', label: '균형',  icon: '⚖️', desc: '배치 32 (기본값)',       yieldEvery: 0, batchSize: 32  },
-  { id: 'perf',     label: '성능',  icon: '⚡', desc: '배치 64 (GPU 효율)',     yieldEvery: 0, batchSize: 64  },
-  { id: 'max',      label: '최대',  icon: '🔥', desc: '배치 128 (최대 GPU)',    yieldEvery: 0, batchSize: 128 },
+  { id: 'eco',      label: '절약',  icon: '🐢', desc: '배치 64 (메모리 절약)',   yieldEvery: 0, batchSize: 64  },
+  { id: 'balanced', label: '균형',  icon: '⚖️', desc: '배치 256 (기본값)',       yieldEvery: 0, batchSize: 256  },
+  { id: 'perf',     label: '성능',  icon: '⚡', desc: '배치 1024 (GPU 효율)',     yieldEvery: 0, batchSize: 1024  },
+  { id: 'max',      label: '최대',  icon: '🔥', desc: '배치 4096 (풀 로드)',    yieldEvery: 0, batchSize: 4096 },
 ];
 
 // ─── 기기 성능 자동 감지 ───────────────────────────────────────────────────────
