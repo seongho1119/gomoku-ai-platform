@@ -14,17 +14,23 @@ export function useAuth() {
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setUser(JSON.parse(raw));
-    } catch { /* ignore */ }
-    setIsLoaded(true);
+    const load = () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        setUser(raw ? JSON.parse(raw) : null);
+      } catch { setUser(null); }
+      setIsLoaded(true);
+    };
+    load();
+    window.addEventListener('auth-changed', load);
+    return () => window.removeEventListener('auth-changed', load);
   }, []);
 
   const saveUser = (u: AuthUser | null) => {
     if (u) localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
     else localStorage.removeItem(STORAGE_KEY);
     setUser(u);
+    window.dispatchEvent(new Event('auth-changed'));
   };
 
   const register = useCallback(async (username: string, password: string): Promise<{ success: boolean; error?: string }> => {

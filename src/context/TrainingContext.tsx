@@ -292,6 +292,7 @@ export function TrainingProvider({ children }: { children: ReactNode }) {
     stopBackgroundTraining();
     setIsAutoTraining(false);
     setEps(0);
+    if (aiRef.current) aiRef.current.saveMemory();
   };
 
   const toggleVisualize = () => {
