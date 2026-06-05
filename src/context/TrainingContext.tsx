@@ -113,7 +113,7 @@ export function TrainingProvider({ children }: { children: ReactNode }) {
   const [batchSize, setBatchSize] = useState(getHardwareParams().batchSize);
   const [currentBackend, setCurrentBackend] = useState<TFBackend>('wasm');
   const [availableBackends, setAvailableBackends] = useState<Record<TFBackend, boolean>>(
-    { webgpu: false, wasm: true }
+    { webgpu: false, webgl: true, wasm: true }
   );
 
   const aiRef = useRef<GomokuAI | null>(null);
