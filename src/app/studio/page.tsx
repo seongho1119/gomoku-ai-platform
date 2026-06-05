@@ -259,7 +259,7 @@ export default function StudioPage() {
                     </div>
                     <input
                       type="range"
-                      min="1"
+                      min="0"
                       max="2000"
                       step="1"
                       value={training.gpuThrottle}
@@ -267,7 +267,7 @@ export default function StudioPage() {
                       className="w-full accent-violet-500 bg-slate-700 rounded-lg appearance-none h-1.5 cursor-pointer"
                     />
                     <div className="flex justify-between text-[9px] text-slate-500 leading-tight">
-                      <span>1ms (최대 가속)</span>
+                      <span>0ms (GPU 풀 로드)</span>
                       <span>2000ms (최소 점유)</span>
                     </div>
                   </div>
@@ -406,7 +406,7 @@ export default function StudioPage() {
                       {/* 🔥 최고 성능 */}
                       <button
                         onClick={async () => {
-                          const best = training.availableBackends.webgpu ? 'webgpu' : 'wasm';
+                          const best = training.availableBackends.webgpu ? 'webgpu' : 'webgl';
                           if (training.currentBackend !== best) await training.changeBackend(best as any);
                           // 스레드 개수를 탐지된 물리 최대 코어 수로 자동 조정
                           training.setNumWorkers(training.maxCores);
@@ -558,14 +558,14 @@ export default function StudioPage() {
                 <div className="bg-black/30 rounded-xl p-3 border border-white/5 relative overflow-hidden flex flex-col justify-center">
                   <div className="text-[10px] text-slate-400 mb-1 z-10">GPU 점유율</div>
                   <div className="text-lg font-black text-orange-400 font-mono z-10">
-                    {training.currentBackend === 'webgpu' 
-                      ? `${Math.round(Math.max(1, 100 - (training.gpuThrottle / 2000) * 100))}%` 
+                    {(training.currentBackend === 'webgpu' || training.currentBackend === 'webgl')
+                      ? `${Math.round(Math.max(1, 100 - (training.gpuThrottle / 2000) * 100))}%`
                       : 'N/A'}
                   </div>
                   <div className="text-[9px] text-slate-500 uppercase z-10">
-                    {training.currentBackend === 'webgpu' ? 'WebGPU 가속' : '미지원 (CPU)'}
+                    {training.currentBackend === 'webgpu' ? 'WebGPU 가속' : training.currentBackend === 'webgl' ? 'WebGL 가속' : '미지원 (CPU)'}
                   </div>
-                  {training.currentBackend === 'webgpu' && (
+                  {(training.currentBackend === 'webgpu' || training.currentBackend === 'webgl') && (
                     <div className="absolute bottom-0 left-0 h-1 bg-orange-500/20 w-full">
                       <div className="h-full bg-orange-500 transition-all duration-300" style={{ width: `${Math.max(1, 100 - (training.gpuThrottle / 2000) * 100)}%` }} />
                     </div>

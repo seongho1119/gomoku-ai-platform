@@ -177,12 +177,23 @@ export function TrainingProvider({ children }: { children: ReactNode }) {
 
       setIsInitializing(true);
       const ai = new GomokuAI('standard', storageKey);
+
+      // 업데이트 전 localStorage에서 에피소드 수 도또 읽기 (모델 로드 실패 시에도 유지하기 위해)
+      const savedEps = localStorage.getItem(`${storageKey}-episodes`);
+      const persistedEpisodes = savedEps ? (parseInt(savedEps, 10) || 0) : 0;
+
       const loaded = await ai.loadMemory();
       if (!loaded) {
-        console.log(`[AI] '${storageKey}' 신규 브레인 생성`);
+        // 모델은 없지만 에피소드 수는 보존 (업데이트 후에도 유지)
+        ai.totalEpisodes = persistedEpisodes;
+        console.log(`[AI] '${storageKey}' 신규 브레인 생성 (에피소드 복원: ${persistedEpisodes})`);
       } else {
         setBrainSize(ai.brainSize);
-        console.log(`[AI] '${storageKey}' 로드 완료`);
+        // loadMemory()가 이미 totalEpisodes를 복원하지만, localStorage 직접 값이 더 클 경우 보정
+        if (persistedEpisodes > ai.totalEpisodes) {
+          ai.totalEpisodes = persistedEpisodes;
+        }
+        console.log(`[AI] '${storageKey}' 로드 완료 (에피소드: ${ai.totalEpisodes})`);
       }
       setSessionAutoEpisodes(ai.totalEpisodes);
       aiRef.current = ai;
@@ -324,10 +335,10 @@ export function TrainingProvider({ children }: { children: ReactNode }) {
       changeGpuThrottle(300);
       changeReplayMax(100000);
     } else if (preset.id === 'perf') {
-      changeGpuThrottle(150);
+      changeGpuThrottle(50);
       changeReplayMax(150000);
     } else if (preset.id === 'max') {
-      changeGpuThrottle(1);
+      changeGpuThrottle(0); // 0ms = 제한 없음, GPU 풀 로드
       changeReplayMax(250000);
     }
   };

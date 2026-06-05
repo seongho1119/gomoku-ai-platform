@@ -142,9 +142,11 @@ let _pendingTrain = false;
 async function maybeTrainOnReplay(ai: GomokuAI) {
   if (_pendingTrain || _replaySize < _batchSize * 2) return;
 
-  // GPU 학습 주기 제어 (Throttle)
-  const now = Date.now();
-  if (now - _lastTrainTime < _gpuThrottleMs) return;
+  // GPU 학습 주기 제어: 0ms = 무제한 (항상 학습)
+  if (_gpuThrottleMs > 0) {
+    const now = Date.now();
+    if (now - _lastTrainTime < _gpuThrottleMs) return;
+  }
 
   _pendingTrain = true;
   try {
