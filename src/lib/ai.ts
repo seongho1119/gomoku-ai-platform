@@ -296,6 +296,4 @@ export class GomokuAI {
     xs.dispose();
     ys.dispose();
   }
-
-
-
+}
